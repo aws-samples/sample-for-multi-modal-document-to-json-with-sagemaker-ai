@@ -18,8 +18,9 @@ from .helpers import (
     find_best_model_checkpoint,
     merge_paths
 )
-import os
 import json
+import pandas as pd
+import shlex
 
 class ModelManager:
     """Handles model-related operations including downloading and extracting model artifacts."""
@@ -180,17 +181,28 @@ class ModelManager:
             shell=False
         )
 
-import pandas as pd
-import subprocess
-import json
+
 
 def list_available_models(bucket_name: str, model_prefix: str) -> pd.DataFrame: 
+
+    
+
+
+    # Escape the inputs to prevent command injection
+    escaped_model_prefix = shlex.quote(model_prefix)
+    escaped_bucket_name = shlex.quote(bucket_name)
+
+    # Remove the quotes added by shlex.quote() since this is going inside another string
+    # and not directly as a command argument
+    escaped_model_prefix = escaped_model_prefix.strip("'")
+    escaped_bucket_name = escaped_bucket_name.strip("'")
+
     cmd = [
         'aws', 's3api', 'list-objects-v2',
-        '--bucket', bucket_name,
-        '--query', f"reverse(Contents[?starts_with(Key, '{model_prefix}') && contains(Key, 'model.tar.gz')]|sort_by(@, &LastModified))[].[LastModified,Size,Key]"
+        '--bucket', escaped_bucket_name,
+        '--query', f"reverse(Contents[?starts_with(Key, '{escaped_model_prefix}') && contains(Key, 'model.tar.gz')]|sort_by(@, &LastModified))[].[LastModified,Size,Key]"
     ]
-    
+
     result = subprocess.run(cmd, capture_output=True, text=True, check=True, shell=False)
     data = json.loads(result.stdout)
     
