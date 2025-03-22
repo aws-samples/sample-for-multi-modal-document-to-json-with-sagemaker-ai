@@ -58,9 +58,6 @@ The graph below displays a comparative heatmap visualization of character edit d
 </figure>
 
 
-
-
-
 ### Comparing Models over Exact Match per Entity
 
 <figure style="display: block; text-align: left;max-width: 800px;">
@@ -73,11 +70,13 @@ The graph below displays a comparative heatmap visualization of character edit d
 
 ### Aggregated Model Comparison Across All Entities
 
+\* (star) indicates best value
+
 |    | model                                                                                | pretty_name                                                                          |   rouge1 |   rouge2 |   rougeL |   rougeLsum | model_name                               |   accuracy (exact match) |   cer_score |
 |---:|:-------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------|---------:|---------:|---------:|------------:|:-----------------------------------------|-------------------------:|------------:|
-|  0 | data/results/infer-json-Qwen-Qwen2-5-VL-3B-Instruct-2025-03-18-00-36-24-726/results  | Qwen2.5 VL 3B Vanilla                                                                |     0.34 |     0.17 |     0.34 |        0.34 | Qwen/Qwen2.5-VL-3B-Instruct              |                     0.1  |  0.824963   |
-|  1 | data/results/infer-json-finetune-llama-3-2-11b-visio-2025-03-17-22-50-45-144/results | LLama3.2 11B Vision 1k fatura2 all keys in data - keys ordered - JSON keys in prompt |     1    |     0.53 |     1    |        1    | meta-llama/Llama-3.2-11B-Vision-Instruct |                     0.99 |  0.00980112 |
-|  2 | data/results/infer-json-finetune-qwen2-5-vl-3b-instr-2025-03-07-12-16-17-261/results | Qwen2.5 VL 3B 300 fatura2 all keys in data - keys ordered - JSON keys in prompt      |     0.97 |     0.52 |     0.97 |        0.97 | Qwen/Qwen2.5-VL-3B-Instruct              |                     0.98 |  0.00636425 |
+|  0 | data/results/infer-json-8xlarge-finetune-qwen2-5-vl--2025-03-21-10-27-17-087/results | Qwen2.5 VL 3B 300 fatura2 all keys in data - keys ordered - JSON keys in prompt      |     0.99 |     **0.53*** |     0.99 |        0.99 | Qwen/Qwen2.5-VL-3B-Instruct              |                     0.98 |  **0.00179195*** |
+|  1 | data/results/infer-json-Qwen-Qwen2-5-VL-3B-Instruct-2025-03-18-00-36-24-726/results  | Qwen2.5 VL 3B Vanilla                                                                |     0.34 |     0.17 |     0.34 |        0.34 | Qwen/Qwen2.5-VL-3B-Instruct              |                     0.1  |  0.824963   |
+|  2 | data/results/infer-json-finetune-llama-3-2-11b-visio-2025-03-17-22-50-45-144/results | LLama3.2 11B Vision 1k fatura2 all keys in data - keys ordered - JSON keys in prompt |     **1***    |     **0.53*** |     **1***    |        **1***    | meta-llama/Llama-3.2-11B-Vision-Instruct |                    **0.99*** |  0.00980112 |
 
 
 ## Key Takeaways
@@ -91,6 +90,18 @@ The graph below displays a comparative heatmap visualization of character edit d
     * We have a minimal prompt but did include the keys that the model is supposed to extract as a list in the prompt.
 * JSON constrained decoding can make sure to generate valid JSON. On a private dataset, on which we also trained, JSON constrained decoding was helpful to reduce the model generating invalid JSON. After applying the data preparation steps on the Fatura2 dataset we do not observe any invalid JSON and do not see a need to use JSON constrained decoding for this dataset.
 * Fine-tuning vision LLMs for document to JSON processing can be done cost effectively using Spot Instances, small models, and small datasets.
+
+## Costs
+Running the notebooks in this repository will occur cost, for example for model training and inference. The cost will depend on how big the model is you are fine-tuning, how large your dataset is, the hyperparameters configuration, and as a result the instance type selected and whether spot training is used. Here is a cost example from one of the models we fine-tuned in us-west-2 (Oregon) region:
+
+|    | model                                                                                | pretty_name                                                                          |   task | spot? | instance type |  billable time (seconds)  |   on-demand hourly rate  |   total cost (USD) | notes |
+|---:|:-------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------|---------:|---------:|---------:|---------:|------------:|:-----------------------------------------|---------|
+|  0 | data/results/infer-json-Qwen-Qwen2-5-VL-3B-Instruct-2025-03-18-00-36-24-726/results  | Qwen2.5 VL 3B                                                                 |     fine-tuning |     spot |     ml.g6.8xlarge |       2829 s | $2.0144       | $1.58 |
+|  1 | data/results/infer-json-Qwen-Qwen2-5-VL-3B-Instruct-2025-03-18-00-36-24-726/results  | Qwen2.5 VL 3B                                                                 |     batch inference |     spot |     ml.g6e.xlarge |       675 s | $1.861       | $0.35 | 250 documents processed. 
+
+
+Keep in mind that the inference job takes additional time for downloading the dataset, downloading the model and merging the LoRA adapter with the base model. In the above example fine-tuned Qwen2.5 VL 3B on a ml.g6e.xlarge instance processes 1.16 documents per second. So  when batch processing more document at once the price should approach $0.45 per 1000 pages.
+
 
 ## Notebooks and Structures
 
