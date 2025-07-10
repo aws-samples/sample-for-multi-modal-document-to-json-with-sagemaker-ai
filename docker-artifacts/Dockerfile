@@ -1,11 +1,11 @@
-FROM vllm/vllm-openai:v0.7.3
+FROM vllm/vllm-openai:v0.9.1
 
 # Install dependencies as root
-RUN pip install ms-swift@git+https://github.com/modelscope/ms-swift.git@v3.1.0
-RUN pip install qwen-vl-utils==0.0.10
+RUN pip install ms-swift@git+https://github.com/modelscope/ms-swift.git@v3.5.3
+RUN pip install qwen-vl-utils==0.0.11
 RUN pip install decord==0.6.0
 RUN pip install awscli
-RUN pip install --upgrade git+https://github.com/huggingface/transformers.git@336dc69d63d56f232a183a3e7f52790429b871ef
+RUN pip install --upgrade git+https://github.com/huggingface/transformers.git@v4.52.4
 # RUN pip install "vllm>=0.7.2" -U
 
 # Make server compatible with SageMaker Hosting contract
