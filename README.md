@@ -32,6 +32,9 @@ The project is organized into seven detailed notebooks covering:
 6. **Endpoint Deployment**: [06_deploy_model_endpoint.ipynb](06_deploy_model_endpoint.ipynb)
 7. **Consume Model Endpoint**: [07_consume_model.ipynb](07_consume_model.ipynb)
 
+## Prerequisite
+* A Python 3.11 or Python 3.12 environment with Jupyter. We tested these notebooks in an Amazon SageMaker Studio Juypterlab environment version `3.2.0`. You can follow the [Amazon SageMaker Developer Guide](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-updated-jl-user-guide-create-space.html) on how to create a Juypterlab Space.
+
 ## Evaluation Highlights
 
 The repository includes a dedicated evaluation notebook (`05_evaluate_model.ipynb`) that performs:
