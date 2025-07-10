@@ -184,10 +184,6 @@ class ModelManager:
 
 
 def list_available_models(bucket_name: str, model_prefix: str) -> pd.DataFrame: 
-
-    
-
-
     # Escape the inputs to prevent command injection
     escaped_model_prefix = shlex.quote(model_prefix)
     escaped_bucket_name = shlex.quote(bucket_name)
@@ -210,6 +206,7 @@ def list_available_models(bucket_name: str, model_prefix: str) -> pd.DataFrame:
     df['Size'] = df['Size'].apply(lambda x: x/1024/1024)
     df['LastModified'] = pd.to_datetime(df['LastModified'])
     df = df[df['Size']>100] # finished adapter should be at least 100mb
+    df = df.rename(columns={'Size': 'Size (MB)'})
     # increase width of column key for df,
     pd.set_option('display.max_colwidth', 200)
     return df

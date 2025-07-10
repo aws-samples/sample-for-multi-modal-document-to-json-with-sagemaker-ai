@@ -13,6 +13,10 @@ from typing import Optional, Tuple, List, Dict, Any
 from pathlib import Path
 import boto3
 import sagemaker
+import os
+import boto3
+from urllib.parse import urlparse
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from pathlib import Path
 
@@ -34,7 +38,7 @@ def setup_directories(*args, **kwargs):
             additional_dir='path/to/additional_dir'
         )
     """
-    all_paths = [Path(p) for p in args + tuple(kwargs.values())]
+    all_paths = [Path(p) for p in args + tuple(kwargs.values()) if p is not None]
     
     for path in all_paths:
         path.mkdir(parents=True, exist_ok=True)
@@ -98,6 +102,60 @@ def parse_checkpoint_dir(dirname: str) -> Optional[Tuple[int, str]]:
         return (int(match.group(1)), dirname)
     return None
 
+
+def _list_s3_directories(s3_uri: str, s3_client = None) -> List[str]:
+    """List immediate subdirectories in an S3 path.
+    
+    Args:
+        s3_uri: S3 URI in format 's3://bucket/prefix/'
+        s3_client: Optional s3 client 
+        
+    Returns:
+        List of directory names (without full path prefix)
+    """
+    try:
+        # Parse S3 URI
+        parsed = urlparse(s3_uri)
+        bucket = parsed.netloc
+        prefix = parsed.path.lstrip('/')
+        
+        # Ensure prefix ends with '/' for proper directory listing
+        if prefix and not prefix.endswith('/'):
+            prefix += '/'
+        
+        # Initialize S3 client
+        if not s3_client:
+            s3_client = boto3.client('s3')
+        
+        # List objects with delimiter to get immediate subdirectories
+        response = s3_client.list_objects_v2(
+            Bucket=bucket,
+            Prefix=prefix,
+            Delimiter='/'
+        )
+        
+        # Extract directory names from CommonPrefixes
+        directories = []
+        if 'CommonPrefixes' in response:
+            for common_prefix in response['CommonPrefixes']:
+                # Remove the base prefix and trailing slash to get just the directory name
+                dir_path = common_prefix['Prefix']
+                if dir_path.startswith(prefix):
+                    dir_name = dir_path[len(prefix):].rstrip('/')
+                    if dir_name:  # Only add non-empty directory names
+                        directories.append(dir_name)
+        
+        return directories
+        
+    except (ClientError, NoCredentialsError) as e:
+        print(f"Error accessing S3: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error listing S3 directories: {e}")
+        return []
+
+
+
 def find_latest_version_dir(model_dir: str) -> Optional[str]:
     """Locate most recent model version for training continuation.
     
@@ -105,19 +163,34 @@ def find_latest_version_dir(model_dir: str) -> Optional[str]:
     - Ensuring training continues from most recent state
     - Maintaining version continuity
     - Preventing accidental use of outdated versions
-    
+        
     Args:
-        model_dir: Path to model directory
+        model_dir: Path to model directory (local or S3 URI)
         
     Returns:
         Optional string of latest version directory name
     """
+    # Check if this is an S3 URI
+    if model_dir.startswith('s3://'):
+        dir_names = _list_s3_directories(model_dir)
+    else:
+        # Original local filesystem implementation
+        try:
+            dir_names = os.listdir(model_dir)
+        except (OSError, FileNotFoundError):
+            return None
+    
+    if not dir_names:
+        return None
+        
     version_dirs = [
         parsed
-        for dirname in os.listdir(model_dir)
+        for dirname in dir_names
         if (parsed := parse_version_dir(dirname)) is not None
     ]
+
     return max(version_dirs)[3] if version_dirs else None
+
 
 def find_latest_checkpoint(version_dir: str) -> Optional[str]:
     """Locate most recent checkpoint for optimal training resumption.
@@ -128,17 +201,33 @@ def find_latest_checkpoint(version_dir: str) -> Optional[str]:
     - Optimal model state restoration
     
     Args:
-        version_dir: Path to version directory
+        version_dir: Path to version directory (local or S3 URI)
         
     Returns:
         Optional string of latest checkpoint directory name
     """
+    # Check if this is an S3 URI
+    if version_dir.startswith('s3://'):
+        dir_names = _list_s3_directories(version_dir)
+    else:
+        # Original local filesystem implementation
+        try:
+            dir_names = os.listdir(version_dir)
+        except (OSError, FileNotFoundError):
+            return None
+    
+    if not dir_names:
+        return None
+        
     checkpoint_dirs = [
         parsed
-        for dirname in os.listdir(version_dir)
+        for dirname in dir_names
         if (parsed := parse_checkpoint_dir(dirname)) is not None
     ]
     return max(checkpoint_dirs)[1] if checkpoint_dirs else None
+
+
+
 
 def get_latest_sagemaker_training_job(job_name_prefix: str) -> Dict[str, Any]:
     """Retrieve most recent training information for monitoring and management.
@@ -224,7 +313,9 @@ def find_best_model_checkpoint(logging_file: str) -> Optional[str]:
     except Exception as e:
         raise Exception(f"Error reading logging file: {str(e)}")
 
-def find_latest_checkpoint_path(checkpoint_dir:str) -> str | None:
+
+
+def find_latest_checkpoint_path(checkpoint_dir: str) -> str | None:
     """
     Finds the path to the latest checkpoint file in the specified checkpoint directory.
 
@@ -233,7 +324,7 @@ def find_latest_checkpoint_path(checkpoint_dir:str) -> str | None:
     the latest checkpoint file within the most recent version directory.
 
     Args:
-        checkpoint_dir (str): The path to the checkpoint directory.
+        checkpoint_dir (str): The path to the checkpoint directory (local or S3 URI).
 
     Returns:
         str | None: The full path to the latest checkpoint file if found, otherwise None.
@@ -241,7 +332,18 @@ def find_latest_checkpoint_path(checkpoint_dir:str) -> str | None:
     Example:
         >>> find_latest_checkpoint_path('/path/to/checkpoints')
         '/path/to/checkpoints/v0-20250213-052238/checkpoint-42'
+        >>> find_latest_checkpoint_path('s3://bucket/checkpoints')
+        's3://bucket/checkpoints/v0-20250213-052238/checkpoint-42'
     """
+
+    if not checkpoint_dir:
+        return None
+    
+    # Check if this is an S3 URI
+    if checkpoint_dir.startswith('s3://'):
+        return _find_latest_checkpoint_path_s3(checkpoint_dir)
+    
+    # Original local filesystem implementation
     if check_checkpoints_directory(checkpoint_dir):
         model_dir = checkpoint_dir
         if os.path.exists(model_dir):
@@ -253,3 +355,46 @@ def find_latest_checkpoint_path(checkpoint_dir:str) -> str | None:
                     full_checkpoint_path = os.path.join(latest_dir, latest_checkpoint)
                     return full_checkpoint_path
     return None
+
+def _find_latest_checkpoint_path_s3(checkpoint_dir: str) -> str | None:
+    """Handle S3 URI checkpoint finding."""
+    try:
+        s3_client = boto3.client('s3')
+        
+        # Parse S3 URI
+        parsed = urlparse(checkpoint_dir)
+        bucket = parsed.netloc
+        base_key = parsed.path.lstrip('/')
+        
+        # Check if directory exists in S3
+        if not _s3_prefix_exists(s3_client, bucket, base_key):
+            return None
+        
+        # Find latest version directory
+        latest_version = find_latest_version_dir(checkpoint_dir)
+        if not latest_version:
+            return None
+        
+        # Find latest checkpoint in version directory
+        version_key = os.path.join(checkpoint_dir, latest_version)
+        latest_checkpoint = find_latest_checkpoint(version_key)
+        if not latest_checkpoint:
+            return None
+        
+        # Return full S3 URI
+        return os.path.join(version_key,latest_checkpoint)
+        
+    except (ClientError, NoCredentialsError) as e:
+        print(f"Error accessing S3: {e}")
+        return None
+
+def _s3_prefix_exists(s3_client, bucket: str, prefix: str) -> bool:
+    """Check if S3 prefix exists."""
+    try:
+        prefix = prefix.rstrip('/') + '/' if prefix else ''
+        response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=1)
+        return 'Contents' in response
+    except ClientError:
+        return False
+
+
