@@ -50,7 +50,7 @@ tar -xf "${MODEL_DIR}/model.tar.gz" -C "$MODEL_DIR"
 # Get the best model from potentially multiple checkpoints:
 # Sample: /opt/ml/checkpoints/v0-20250214-124042/checkpoint-500
 BEST_MODEL_CHECKPOINT=$(find /opt/ml/model -name logging.jsonl -exec grep -hoP '"best_model_checkpoint":\s*"\K[^"]*' {} \; | head -n1)
-BEST_MODEL_DIR=$MODEL_DIR/${BEST_MODEL_CHECKPOINT#/opt/ml/checkpoints/}
+BEST_MODEL_DIR=${BEST_MODEL_CHECKPOINT#/opt/ml/checkpoints/}
 
 
 GPU_MEMORY_UTILIZATION=0.95
@@ -58,7 +58,7 @@ GPU_MEMORY_UTILIZATION=0.95
 # First, merge the QLoRA/LoRA adapter with the base model
 # Note vllm only supports LoRA merging, not QLoRA merging. Which is why we use swift to merge.
 echo "====> Merging QLoRA/LoRA adapter with base model"
-swift export --adapters $BEST_MODEL_DIR --merge_lora true
+swift export --adapters $BEST_MODEL_DIR --merge_lora true --use_hf true
 echo "====> QLoRA/LoRA merging completed"
 
 # Check if merged model directory exists
@@ -86,6 +86,7 @@ echo "====> Starting vllm serve with merged model: $MERGED_MODEL_DIR"
 exec vllm serve \
   "$MERGED_MODEL_DIR" \
   --tokenizer "$MERGED_MODEL_DIR" \
+  --no-skip-tokenizer-init \
   --port 8080 \
   --host 0.0.0.0 \
   --tokenizer-mode auto \
@@ -96,7 +97,6 @@ exec vllm serve \
   --seed 0 \
   --pipeline-parallel-size 1 \
   --tensor-parallel-size $NUM_GPUS \
-  --use-v2-block-manager \
   --swap-space 4 \
   --cpu-offload-gb 0 \
   --gpu-memory-utilization $GPU_MEMORY_UTILIZATION \
@@ -106,10 +106,7 @@ exec vllm serve \
   --max-logprobs 20 \
   --disable-log-stats \
   --max-seq-len-to-capture 8192 \
-  --tokenizer-pool-size 0 \
-  --tokenizer-pool-type ray \
   --guided-decoding-backend xgrammar \
-  --spec-decoding-acceptance-method rejection_sampler \
   --disable-async-output-proc \
   --scheduling-policy fcfs \
   --scheduler-cls vllm.core.scheduler.Scheduler \
