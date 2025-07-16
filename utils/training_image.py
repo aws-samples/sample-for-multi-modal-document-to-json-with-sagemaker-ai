@@ -22,7 +22,7 @@ def get_python_version(major, minor, *args,**kwargs) -> Version:
 
 # list of supported images: https://github.com/aws/sagemaker-distribution/blob/main/support_policy.md#supported-image-versions
 MAP_PY_VER_TO_SM_DISTRIBUTION_VER = {
-   get_python_version(3, 11):SageMakerDistribution("2.6.0","2.243.2"),   # https://github.com/aws/sagemaker-distribution/blob/main/build_artifacts/v2/v2.6/v2.6.0/CHANGELOG-gpu.md
+    get_python_version(3, 11):SageMakerDistribution("2.7.1","2.245.0"),   # https://github.com/aws/sagemaker-distribution/blob/main/build_artifacts/v2/v2.7/v2.7.1/CHANGELOG-gpu.md
     get_python_version(3, 12):SageMakerDistribution("3.1.0","2.244.2")  # https://github.com/aws/sagemaker-distribution/blob/main/build_artifacts/v3/v3.1/v3.1.0/CHANGELOG-gpu.md
 }
 
