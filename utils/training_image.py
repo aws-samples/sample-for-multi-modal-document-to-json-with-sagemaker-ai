@@ -129,33 +129,32 @@ SAGEMAKER_STUDIO_METADATA = "/opt/ml/metadata/resource-metadata.json"
 DOCKER_ENABLED = "ENABLED"
 DOCKER_DISABLED = "DISABLED"
 
-def check_and_enable_docker_access_sagemaker_studio(use_local_mode, session):
-    if use_local_mode:
-        resource_metadata = load_json_file(SAGEMAKER_STUDIO_METADATA)
-        if resource_metadata:
-            docker_access_disabled = True
-            docker_access = None
-            try:
-                domain_id = resource_metadata["DomainId"]
-                sm_client = session.boto_session.client("sagemaker")
-                domain = sm_client.describe_domain(DomainId=domain_id)
-                if docker_access_disabled := ((docker_access := domain["DomainSettings"]["DockerSettings"]["EnableDockerAccess"]) == DOCKER_DISABLED):
-                    print("Docker disabled on SageMaker Studio domain. Trying to enable docker access...")
-                    sm_client.update_domain(
-                        DomainId=domain_id,
-                        DomainSettingsForUpdate={
-                            'DockerSettings': {
-                                'EnableDockerAccess': DOCKER_ENABLED
-                            }
+def enable_docker_access_sagemaker_studio(session):
+    resource_metadata = load_json_file(SAGEMAKER_STUDIO_METADATA)
+    if resource_metadata:
+        docker_access_disabled = True
+        docker_access = None
+        try:
+            domain_id = resource_metadata["DomainId"]
+            sm_client = session.boto_session.client("sagemaker")
+            domain = sm_client.describe_domain(DomainId=domain_id)
+            if docker_access_disabled := ((docker_access := domain["DomainSettings"]["DockerSettings"]["EnableDockerAccess"]) == DOCKER_DISABLED):
+                print("Docker disabled on SageMaker Studio domain. Trying to enable docker access...")
+                sm_client.update_domain(
+                    DomainId=domain_id,
+                    DomainSettingsForUpdate={
+                        'DockerSettings': {
+                            'EnableDockerAccess': DOCKER_ENABLED
                         }
-                    )
-                    time.sleep(4)
-                    domain = sm_client.describe_domain(DomainId=domain_id)
-                    docker_access = domain["DomainSettings"]["DockerSettings"]["EnableDockerAccess"]
-                    docker_access_disabled = (docker_access == DOCKER_DISABLED)
-            except Exception as e: 
-                print(e)
-                
-            print(f"SageMaker Studio domain ({domain_id}) docker access: {docker_access}")
-            if docker_access_disabled:
-                print("Failed to enable Docker Access on SageMaker Studio domain. Please enable it manually or ask your administrator. Docker access is required to run in local mode. https://docs.aws.amazon.com/sagemaker/latest/dg/studio-updated-local-get-started.html#studio-updated-local-enable")
+                    }
+                )
+                time.sleep(4)
+                domain = sm_client.describe_domain(DomainId=domain_id)
+                docker_access = domain["DomainSettings"]["DockerSettings"]["EnableDockerAccess"]
+                docker_access_disabled = (docker_access == DOCKER_DISABLED)
+        except Exception as e: 
+            print(e)
+            
+        print(f"SageMaker Studio domain ({domain_id}) docker access: {docker_access}")
+        if docker_access_disabled:
+            print("Failed to enable Docker Access on SageMaker Studio domain. Please enable it manually or ask your administrator. Docker access is required to run in local mode. https://docs.aws.amazon.com/sagemaker/latest/dg/studio-updated-local-get-started.html#studio-updated-local-enable")
