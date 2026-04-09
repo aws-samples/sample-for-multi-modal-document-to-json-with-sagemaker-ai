@@ -5,3 +5,33 @@ data
 **/**/.ipynb_checkpoints
 models
 config.yaml
+results_*.csv
+
+# OS artifacts
+.DS_Store
+
+# pip artifacts
+=*
+
+# Binary model files
+*.gguf
+
+# Generated data directories
+extracted_files/
+ocr_images/
+output/
+
+# Scratch/demo files
+imag.jpg
+demo_*.py
+demo_results.csv
+test_real_data.py
+
+# AI-generated tracking docs
+IMPLEMENTATION_COMPLETE.md
+QUICK_REFERENCE.md
+REFACTORING_PROGRESS.md
+TESTING_RESULTS.md
+
+# Test results with sensitive data
+test/
