@@ -5,7 +5,7 @@ import tarfile
 from pathlib import Path
 import os
 import glob
-from typing import Union
+from typing import List, Union, Optional
 from tqdm.auto import tqdm
 import logging
 import sys
@@ -109,9 +109,7 @@ def get_s3_suffix(s3_uri: str) -> str:
 
 
 
-
-
-def merge_paths(path1: Union[str, Path], path2: Union[str, Path]) -> Union[str, Path]:
+def merge_paths(path1: Optional[Union[str, Path]], path2: Union[str, Path]) -> Union[str, Path]:
     """
     Merges two paths intelligently by matching overlapping segments. Supports both str and pathlib.Path inputs.
     
@@ -125,6 +123,8 @@ def merge_paths(path1: Union[str, Path], path2: Union[str, Path]) -> Union[str, 
     Raises:
         ValueError: If no matching segments are found between the paths.
     """
+    if path1 is None:
+        return path2
     # Convert inputs to Path objects if they are strings
     path1_is_str = isinstance(path1, str)
     path2_is_str = isinstance(path2, str)
@@ -337,3 +337,32 @@ def get_latest_checkpoint(model_dir: str) -> str:
 
     print(f"Using latest checkpoint: {latest_checkpoint}")
     return str(latest_checkpoint)
+
+def parse_s3_uri(s3_uri: str) -> tuple:
+    """
+    Parse S3 URI into bucket and prefix components.
+    
+    Args:
+        s3_uri: S3 URI in format s3://bucket/prefix/
+    
+    Returns:
+        Tuple of (bucket_name, prefix)
+    """
+    parsed = urlparse(s3_uri)
+    bucket = parsed.netloc
+    prefix = parsed.path.lstrip('/')
+    return bucket, prefix
+
+def find_file_with_resource(s3_prefix: str, target_filename: str) -> List[str]:
+    """Alternative implementation using S3 resource (faster for large buckets)."""
+    bucket_name, prefix = parse_s3_uri(s3_prefix)
+    
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucket_name)
+    
+    matching_files = []
+    for obj in bucket.objects.filter(Prefix=prefix):
+        if obj.key.endswith(f"/{target_filename}") or obj.key.split('/')[-1] == target_filename:
+            matching_files.append(f"s3://{bucket_name}/{obj.key}")
+    
+    return matching_files

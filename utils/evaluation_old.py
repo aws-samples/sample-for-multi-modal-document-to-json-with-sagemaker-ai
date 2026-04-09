@@ -2,6 +2,10 @@ import pandas as pd
 import json
 import re
 
+from .helpers import merge_paths
+from functools import partial
+
+
 # from tqdm import tqdm
 from tqdm.auto import tqdm  # for notebooks
 
@@ -92,8 +96,31 @@ def parse_json_safely(text):
             return json.loads(json_match.group())
         return {}
 
+def extract_images_from_messages_nova(messages, dataset_base_dir = ""):
+    # TODO write a conversation format adapter for the different formats i.e. SWIFT, Amazon Nova
+    if messages is None:
+        return []
 
-def process_run(run, file, results_dir, expected_num_rows=-1):
+    images = []
+    for msg in messages:
+        if "content" in msg:
+            for content in msg["content"]:
+                if "image" in content:
+                    # dataset for fine-tuning Amazon Nova only supports images in Amazon S3 
+                    # https://docs.aws.amazon.com/nova/latest/userguide/fine-tune-prepare-data-understanding.html
+                    img = content["image"]
+                    s3_location = img.get("source", {}).get("s3Location", {}).get("uri", None)
+                    if s3_location:
+                        # remove s3 prefix
+                        local_image_path = merge_paths(dataset_base_dir, s3_location)
+                        images.append({
+                            "path": local_image_path
+                        })
+                    
+    return images
+
+
+def process_run(run, file, results_dir, expected_num_rows=-1, dataset_base_dir=""):
 
     df = pd.read_json(file, lines=True)
 
@@ -113,6 +140,11 @@ def process_run(run, file, results_dir, expected_num_rows=-1):
     raw_response = df["response"]
     parsed_response = raw_response.apply(find_and_parse_json)
     label = df["labels"].apply(to_dict)
+
+    if "images" not in df.columns:
+        partial_func = partial(extract_images_from_messages_nova, dataset_base_dir=dataset_base_dir)
+        df["images"] = df["messages"].map(partial_func, na_action=None)
+        
 
     df["pretty_name"] = pretty_name
     df["file_path"] = file
